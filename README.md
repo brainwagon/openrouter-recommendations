@@ -10,14 +10,16 @@ No build step, no dependencies, no API key — open `index.html` in a browser.
 
 ## What it does
 
-- Pulls the public `/api/v1/models` endpoint on load and every 15 minutes.
-- Filters to a set of model families — DeepSeek V4, Qwen 3.6/3.8, Gemma 4,
-  Grok 4, GPT-5, Claude — each a checkbox, with older generations available
-  behind their own toggles.
-- Ranks by **blended** cost: the price of 1M tokens at your prompt/completion
-  mix (default 3:1), since output tokens usually dominate a real bill.
-- Estimates the **average** cost per request across a model's providers, and
-  names the provider serving OpenRouter's default route.
+- Pulls the public `/api/v1/models` endpoint on load and every 15 minutes, then
+  each model's `/endpoints` roster to learn who actually serves it.
+- Filters to a set of model families — Claude 5, DeepSeek V4, Gemma 4, GPT-5,
+  Grok 4, Qwen 3.6/3.8 — each a checkbox, with the preceding generation of each
+  available behind its own toggle.
+- Ranks by **expected** cost across a slug's providers, with **blended**
+  input/output pricing at your own prompt/completion mix (default 3:1), since
+  output tokens usually dominate a real bill.
+- Names the provider serving OpenRouter's default route, counts the
+  alternatives, and flags when a different provider is cheaper.
 - Flags price changes since the last time you looked.
 
 ## Columns
@@ -28,9 +30,12 @@ No build step, no dependencies, no API key — open `index.html` in a browser.
 | Input / Output | Price per 1M tokens on the default route |
 | Cache read | Price per 1M cached input tokens |
 | Blended | `(in×input + out×output) / (in+out)` at your ratio |
-| Est. avg | Expected cost across all providers (see below) |
+| Est. avg | Expected cost across all providers (see below); sorted by this |
 | Context | Context window |
 | Provider | Who serves the default route, `+n` others, `↓n%` if one is cheaper |
+
+The page carries its own explainer — a collapsed block under the table covers
+the glyphs, how a slug is priced, and both formulas.
 
 ## Estimating the average cost
 
@@ -56,10 +61,15 @@ deterministic rate.
 
 - **Grouping.** Sorting by Model nests each release line (`openai/gpt-5`) over
   its variant families (`…-v4-flash` and its dated builds), cheapest first
-  inside each. Headers are collapsible.
+  inside each. Headers collapse when clicked, and a collapsed one shows the
+  price range of what it hides.
 - **Tiers.** `:free` and `:batch` variants are separate service tiers, not
   cheaper releases, so they are toggled separately and excluded from the
-  cheapest-version badge.
+  cheapest-version badge. Same for same-provider tiers (`flex`, `priority`),
+  which is why the `↓n%` marker only fires for a genuinely different provider.
+- **Versions.** A green `$` marks the cheapest release of a model that ships
+  several dated builds — `deepseek-v4-flash` undercuts both `-flash-latest`
+  and `-flash-0731`, so newest is not cheapest.
 - **State.** Filters, blend ratio, sort order and collapsed groups persist in
   `localStorage`, along with a price baseline used for the change arrows.
   *Reset view* clears the UI state; *Reset change baseline* re-anchors prices.
@@ -85,3 +95,8 @@ Each entry is a label plus a regex tested against the model id:
 { key: 'grok4', label: 'Grok 4', on: true,
   test: id => /^~?x-ai\/grok-(4|latest|build)/.test(id) },
 ```
+
+Checkboxes are laid out alphabetically by label at build time, so a new family
+lands beside its own generation wherever you declare it. `key` is what the
+saved settings reference — changing a `key` resets that checkbox, changing a
+`label` does not.
