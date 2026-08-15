@@ -43,6 +43,10 @@
   .explain p, .explain li { color: var(--dim); font-size: 12.5px; margin: 5px 0; }
   .explain ul { margin: 5px 0; padding-left: 18px; }
   .explain li { margin: 3px 0; }
+  /* Glyph key: markers sit at a fixed left edge so they read as a column. */
+  .explain ul.glyphs { list-style: none; padding-left: 2px; }
+  .explain ul.glyphs > li { margin: 4px 0; }
+  .explain ul.glyphs .delta { margin-left: 0; }
   .explain b { color: #c8cede; font-weight: 600; }
   .explain code {
     font-family: var(--mono); font-size: 11.5px;
@@ -179,23 +183,32 @@
     </thead>
     <tbody id="rows"></tbody>
   </table>
-  <div class="legend">
-    Blended = (in&times;input + out&times;output) / (in+out), i.e. the cost of 1M tokens at your prompt/completion mix.
-    Coloured arrows show the change since your last baseline (stored in this browser).
-    A green <span class="best">$</span> marks the cheapest release when a model ships as several
-    dated versions at different prices; hover it for the version count.
-    Est. avg is what a request should cost on average given OpenRouter's inverse-square price
-    weighting across a slug's providers, scaled by each provider's 30-minute uptime —
-    <span class="below">green</span> below the headline price,
-    <span class="above">amber</span> above; hover for each provider's estimated share.
-    Prices are OpenRouter's default route; Provider names who serves that route, <span class="more">+n</span>
-    counts the alternatives (hover for all of them), and <span class="cheaper">↓n%</span> means a cheaper
-    provider exists for the same model.
-  </div>
 </div>
 
 <details class="explain">
-  <summary>How a slug is priced, and how these numbers are computed</summary>
+  <summary>How to read this table, how a slug is priced, and how the numbers are computed</summary>
+
+  <h3>Reading the table</h3>
+  <ul class="glyphs">
+    <li><span class="best">$</span> — cheapest release of a model that ships as several dated
+      versions at different prices; hover for the version count.</li>
+    <li><span class="delta down">▼n%</span> <span class="delta up">▲n%</span> — price change
+      since your baseline, which is stored in this browser and re-anchored by
+      <i>Reset change baseline</i>; hover for the old price.</li>
+    <li><span class="below">green</span> / <span class="above">amber</span> Est. avg — expected
+      cost below / above the headline price; hover for each provider's estimated share.</li>
+    <li><span class="more">+n</span> — how many other providers serve the slug; hover the
+      provider name for the whole roster with prices.</li>
+    <li><span class="cheaper">↓n%</span> — a different provider serves the same model that
+      much cheaper than the default route.</li>
+    <li><span class="tag free">free</span> <span class="tag batch">batch</span> — separate
+      service tiers rather than cheaper releases, so each has its own checkbox and neither
+      competes for the <span class="best">$</span>.</li>
+    <li><span class="pend">alias</span> — a <code>~</code> routing alias
+      (<code>~openai/gpt-latest</code>), which has no provider roster of its own.</li>
+    <li>Sorting by <b>Model</b> nests each release line over its variant families, cheapest
+      first inside each; those headers collapse when clicked.</li>
+  </ul>
 
   <h3>A slug is a menu, not a price</h3>
   <p>
