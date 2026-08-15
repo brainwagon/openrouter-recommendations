@@ -26,7 +26,9 @@
   .sub { color: var(--dim); font-size: 12px; display: inline; margin-left: 8px; }
   /* Rows get hard to read when the columns are flung apart on a wide monitor,
      so the page stops growing past a comfortable measure. */
-  header, .panel { max-width: 1230px; }
+  header, .panel, footer { max-width: 1230px; }
+  footer { color: var(--dim); font-size: 11px; padding: 0 2px 6px; }
+  footer .sep { margin: 0 6px; opacity: 0.5; }
   .panel {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 6px; padding: 8px 10px; margin: 10px 0;
@@ -165,6 +167,12 @@
     provider exists for the same model.
   </div>
 </div>
+
+<footer>
+  <a href="https://github.com/brainwagon/openrouter-recommendations">source on GitHub</a>
+  <span class="sep">·</span>
+  data from the <a href="https://openrouter.ai/docs/api-reference/list-available-models">OpenRouter models API</a>
+</footer>
 
 <script>
 // ---------------------------------------------------------------------------
