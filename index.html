@@ -174,20 +174,22 @@
 // still 4.5), so the split between current and older is spelled out.
 const CLAUDE_NOW = /^~?anthropic\/claude-(opus-5|sonnet-5|fable-5|haiku-4\.5|(opus|sonnet|haiku|fable)-latest)/;
 
+// Listed by model line, older generation first. The checkboxes are laid out by
+// label (see below), so this array's order is for reading, not for display.
 const FAMILIES = [
-  { key: 'dsv4',    label: 'DeepSeek V4', on: true,  test: id => /^~?deepseek\/deepseek-v4/.test(id) },
-  { key: 'qwen38',  label: 'Qwen 3.8',    on: true,  test: id => /^~?qwen\/qwen3\.8/.test(id) },
-  { key: 'qwen36',  label: 'Qwen 3.6',    on: true,  test: id => /^~?qwen\/qwen3\.6/.test(id) },
-  { key: 'gemma4',  label: 'Gemma 4',     on: true,  test: id => /^~?google\/gemma-4/.test(id) },
-  { key: 'grok4',   label: 'Grok 4',      on: true,  test: id => /^~?x-ai\/grok-(4|latest|build)/.test(id) },
-  { key: 'gpt5',    label: 'GPT-5',       on: true,  test: id => /^~?openai\/gpt-(5|latest|mini-latest|chat-latest)/.test(id) },
-  { key: 'claude',  label: 'Claude',      on: true,  test: id => CLAUDE_NOW.test(id) },
-  { key: 'dsold',   label: 'DeepSeek V3/R1', on: false, test: id => /^~?deepseek\/(deepseek-(chat|v3)|r1)/.test(id) },
-  { key: 'gemma3',  label: 'Gemma 3',     on: false, test: id => /^~?google\/gemma-3/.test(id) },
-  { key: 'grok3',   label: 'Grok 3 & older', on: false, test: id => /^~?x-ai\/grok-([0-3]|beta|vision)/.test(id) },
-  { key: 'gptold',  label: 'GPT-4 & o-series', on: false, test: id => /^~?openai\/(gpt-[34]|o[1-9])/.test(id) },
   { key: 'claudeold', label: 'Claude 4 & older', on: false,
     test: id => /^~?anthropic\//.test(id) && !CLAUDE_NOW.test(id) },
+  { key: 'claude',  label: 'Claude 5',    on: true,  test: id => CLAUDE_NOW.test(id) },
+  { key: 'dsold',   label: 'DeepSeek V3 & R1', on: false, test: id => /^~?deepseek\/(deepseek-(chat|v3)|r1)/.test(id) },
+  { key: 'dsv4',    label: 'DeepSeek V4', on: true,  test: id => /^~?deepseek\/deepseek-v4/.test(id) },
+  { key: 'gemma3',  label: 'Gemma 3',     on: false, test: id => /^~?google\/gemma-3/.test(id) },
+  { key: 'gemma4',  label: 'Gemma 4',     on: true,  test: id => /^~?google\/gemma-4/.test(id) },
+  { key: 'gptold',  label: 'GPT-4 & o-series', on: false, test: id => /^~?openai\/(gpt-[34]|o[1-9])/.test(id) },
+  { key: 'gpt5',    label: 'GPT-5',       on: true,  test: id => /^~?openai\/gpt-(5|latest|mini-latest|chat-latest)/.test(id) },
+  { key: 'grok3',   label: 'Grok 3 & older', on: false, test: id => /^~?x-ai\/grok-([0-3]|beta|vision)/.test(id) },
+  { key: 'grok4',   label: 'Grok 4',      on: true,  test: id => /^~?x-ai\/grok-(4|latest|build)/.test(id) },
+  { key: 'qwen36',  label: 'Qwen 3.6',    on: true,  test: id => /^~?qwen\/qwen3\.6/.test(id) },
+  { key: 'qwen38',  label: 'Qwen 3.8',    on: true,  test: id => /^~?qwen\/qwen3\.8/.test(id) },
 ];
 
 const API = 'https://openrouter.ai/api/v1/models';
@@ -257,7 +259,12 @@ restoreUi();
 
 // --- controls --------------------------------------------------------------
 const famBox = document.getElementById('families');
-FAMILIES.forEach(f => {
+// Alphabetical by label, numerically aware, so a model line's generations land
+// side by side (Gemma 3 next to Gemma 4, Qwen 3.6 before Qwen 3.8) no matter
+// what order they were declared in.
+[...FAMILIES]
+  .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
+  .forEach(f => {
   const l = document.createElement('label');
   l.className = 'chk';
   l.innerHTML = `<input type="checkbox" data-fam="${f.key}"${f.on ? ' checked' : ''}> ${f.label}`;
