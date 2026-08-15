@@ -4,6 +4,8 @@ A single self-contained HTML page that tracks model pricing on
 [OpenRouter](https://openrouter.ai) and ranks the models I care about by cost.
 No build step, no dependencies, no API key — open `index.html` in a browser.
 
+**Live: <https://mvandewettering.com/openrouter-recommendations/>**
+
 ![screenshot](docs/screenshot.png)
 
 ## What it does
@@ -61,6 +63,18 @@ deterministic rate.
 - **State.** Filters, blend ratio, sort order and collapsed groups persist in
   `localStorage`, along with a price baseline used for the change arrows.
   *Reset view* clears the UI state; *Reset change baseline* re-anchors prices.
+
+## Hosting
+
+Served by GitHub Pages from `main` at the repository root — there is nothing to
+build, so a push to `main` is a deploy. The page only ever talks to
+`openrouter.ai`, which sends permissive CORS headers, so it works the same from
+a static host as it does from `file://`... except that `file://` pages have a
+null origin, which the API can reject. Serve it over HTTP when testing locally:
+
+```sh
+python3 -m http.server 8731    # then open http://localhost:8731/
+```
 
 ## Editing the watchlist
 
