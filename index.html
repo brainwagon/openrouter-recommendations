@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenRouter Price Watch</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1c1f25;
+    --line: #2c313a;
+    --fg: #e6e8ec;
+    --dim: #949aa6;
+    --accent: #7cc4ff;
+    --up: #ff7b72;
+    --down: #6fd58a;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 14px 16px;
+    background: var(--bg); color: var(--fg);
+    font: 14px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; display: inline; }
+  .sub { color: var(--dim); font-size: 12px; display: inline; margin-left: 8px; }
+  /* Rows get hard to read when the columns are flung apart on a wide monitor,
+     so the page stops growing past a comfortable measure. */
+  header, .panel { max-width: 1230px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 10px; margin: 10px 0;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+  .row + .row { margin-top: 7px; }
+  label { font-size: 13px; color: var(--dim); user-select: none; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; color: var(--fg); cursor: pointer; }
+  input[type=text], input[type=number] {
+    background: #0f1114; color: var(--fg);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 2px 6px; font: inherit; font-size: 12px;
+  }
+  input[type=text] { width: 180px; }
+  input[type=number] { width: 56px; font-family: var(--mono); }
+  button {
+    background: #262b33; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 4px; padding: 3px 9px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 800px; }
+  th, td { padding: 3px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th {
+    font-size: 11px; color: var(--dim); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--bg);
+  }
+  th:hover { color: var(--fg); }
+  th.sorted { color: var(--accent); }
+  tbody tr:nth-child(even) { background: #262b34; }
+  tbody tr:hover { background: #333a46; }   /* must out-rank the stripe above */
+  td.num { font-family: var(--mono); font-size: 12px; }
+  .blend { font-weight: 600; }
+  .rank { color: #5c626d; font-family: var(--mono); font-size: 11px; padding-right: 3px; }
+  /* The id is what you paste into an API call, so it leads; the marketing name
+     trails it as dim context. */
+  .mid { font-family: var(--mono); font-size: 13px; }
+  .hname { color: var(--dim); font-size: 11px; margin-left: 7px; }
+  td.prov { text-align: left; font-size: 12px; cursor: help; }
+  td.est { cursor: help; }
+  .below { color: var(--down); }
+  .above { color: #e0a35c; }
+  td.est .same { color: var(--dim); }
+  .more { color: #5c626d; font-size: 11px; margin-left: 3px; }
+  .cheaper { color: var(--down); font-family: var(--mono); font-size: 11px; }
+  .pend { color: #4a4f58; }
+  .tag {
+    display: inline-block; font-size: 9px; letter-spacing: .04em;
+    padding: 0 4px; border-radius: 3px; border: 1px solid var(--line);
+    color: var(--dim); margin-left: 5px; vertical-align: 1px;
+  }
+  .tag.free { color: var(--down); border-color: #2f5c3c; }
+  .tag.batch { color: var(--accent); border-color: #2b4a63; }
+  .best { color: var(--down); font-weight: 700; margin-left: 5px; cursor: help; }
+  tr.grp-open > td { border-bottom-color: #2a2f38; }
+  tr.grp-cont > td:first-child { padding-left: 24px; }
+  tr.grp-deep > td:first-child { padding-left: 40px; }
+  tr.ghead.sub > td { background: #191d23; padding-left: 24px; }
+  tr.ghead.sub:hover > td { background: #191d23; }
+  tr.ghead.sub .gname { color: #8d95a3; font-size: 11px; }
+  tr.ghead > td {
+    background: #171a20; padding-top: 5px;
+    border-bottom-color: #333a46; font-size: 12px;
+  }
+  tr.ghead > td { cursor: pointer; user-select: none; }
+  tr.ghead:hover > td { background: #1e232b; }
+  tr.ghead:hover .gname { color: var(--fg); }
+  .caret { color: #6d7686; display: inline-block; width: 12px; font-size: 10px; }
+  .grange { color: var(--dim); font-family: var(--mono); font-size: 11px; margin-left: 10px; }
+  .gname { font-family: var(--mono); color: #b9c0cc; }
+  .gcount { color: #5c626d; font-size: 11px; margin-left: 8px; }
+  .pfx { opacity: 0.45; }
+  .delta { font-size: 12px; font-family: var(--mono); margin-left: 6px; }
+  .delta.up { color: var(--up); }
+  .delta.down { color: var(--down); }
+  .status { color: var(--dim); font-size: 12px; }
+  .status.err { color: var(--up); }
+  .legend { color: var(--dim); font-size: 11px; margin-top: 8px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>OpenRouter Price Watch</h1>
+  <span class="sub">Live pricing from the OpenRouter models API, ranked cheapest first. Prices are USD per 1M tokens.</span>
+</header>
+
+<div class="panel">
+  <div class="row" id="families"></div>
+  <div class="row">
+    <label class="chk"><input type="checkbox" id="showFree" checked> show <code>:free</code></label>
+    <label class="chk"><input type="checkbox" id="showBatch"> show <code>:batch</code></label>
+    <label>filter <input type="text" id="search" placeholder="substring of model id…"></label>
+    <label>blend ratio
+      <input type="number" id="inTok" value="3" min="0" step="0.5"> in :
+      <input type="number" id="outTok" value="1" min="0" step="0.5"> out
+    </label>
+    <button id="refresh">Refresh</button>
+    <button id="baseline">Reset change baseline</button>
+    <button id="resetUi" title="Forget saved filters, ratio and sort order">Reset view</button>
+    <span class="status" id="status">loading…</span>
+  </div>
+</div>
+
+<div class="panel tablewrap">
+  <table>
+    <thead>
+      <tr>
+        <th data-key="name">Model</th>
+        <th data-key="prompt">Input</th>
+        <th data-key="completion">Output</th>
+        <th data-key="cache">Cache read</th>
+        <th data-key="blended">Blended</th>
+        <th data-key="expected" title="expected cost per 1M tokens given OpenRouter's inverse-square price weighting across providers">Est. avg</th>
+        <th data-key="context">Context</th>
+        <th data-key="provider">Provider</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="legend">
+    Blended = (in&times;input + out&times;output) / (in+out), i.e. the cost of 1M tokens at your prompt/completion mix.
+    Coloured arrows show the change since your last baseline (stored in this browser).
+    A green <span class="best">$</span> marks the cheapest release when a model ships as several
+    dated versions at different prices; hover it for the version count.
+    Est. avg is what a request should cost on average given OpenRouter's inverse-square price
+    weighting across a slug's providers, scaled by each provider's 30-minute uptime —
+    <span class="below">green</span> below the headline price,
+    <span class="above">amber</span> above; hover for each provider's estimated share.
+    Prices are OpenRouter's default route; Provider names who serves that route, <span class="more">+n</span>
+    counts the alternatives (hover for all of them), and <span class="cheaper">↓n%</span> means a cheaper
+    provider exists for the same model.
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Families you care about. Add or edit freely: `test` runs against the model id.
+// ---------------------------------------------------------------------------
+// Anthropic's current generation spans two version numbers (Haiku's newest is
+// still 4.5), so the split between current and older is spelled out.
+const CLAUDE_NOW = /^~?anthropic\/claude-(opus-5|sonnet-5|fable-5|haiku-4\.5|(opus|sonnet|haiku|fable)-latest)/;
+
+const FAMILIES = [
+  { key: 'dsv4',    label: 'DeepSeek V4', on: true,  test: id => /^~?deepseek\/deepseek-v4/.test(id) },
+  { key: 'qwen38',  label: 'Qwen 3.8',    on: true,  test: id => /^~?qwen\/qwen3\.8/.test(id) },
+  { key: 'qwen36',  label: 'Qwen 3.6',    on: true,  test: id => /^~?qwen\/qwen3\.6/.test(id) },
+  { key: 'gemma4',  label: 'Gemma 4',     on: true,  test: id => /^~?google\/gemma-4/.test(id) },
+  { key: 'grok4',   label: 'Grok 4',      on: true,  test: id => /^~?x-ai\/grok-(4|latest|build)/.test(id) },
+  { key: 'gpt5',    label: 'GPT-5',       on: true,  test: id => /^~?openai\/gpt-(5|latest|mini-latest|chat-latest)/.test(id) },
+  { key: 'claude',  label: 'Claude',      on: true,  test: id => CLAUDE_NOW.test(id) },
+  { key: 'dsold',   label: 'DeepSeek V3/R1', on: false, test: id => /^~?deepseek\/(deepseek-(chat|v3)|r1)/.test(id) },
+  { key: 'gemma3',  label: 'Gemma 3',     on: false, test: id => /^~?google\/gemma-3/.test(id) },
+  { key: 'grok3',   label: 'Grok 3 & older', on: false, test: id => /^~?x-ai\/grok-([0-3]|beta|vision)/.test(id) },
+  { key: 'gptold',  label: 'GPT-4 & o-series', on: false, test: id => /^~?openai\/(gpt-[34]|o[1-9])/.test(id) },
+  { key: 'claudeold', label: 'Claude 4 & older', on: false,
+    test: id => /^~?anthropic\//.test(id) && !CLAUDE_NOW.test(id) },
+];
+
+const API = 'https://openrouter.ai/api/v1/models';
+const STORE = 'openrouter-price-baseline';
+const STORE_UI = 'openrouter-price-ui';
+const UI_VERSION = 2;          // bump when a stored default should be re-applied
+const STORE_EP = 'openrouter-price-endpoints-v3';   // v3 records uptime/status
+const EP_TTL = 6 * 60 * 60 * 1000;   // provider rosters change slowly; cache 6h
+const M = 1e6;
+
+let models = [];               // filtered + normalised
+let sortKey = 'expected';      // expected cost across providers, not the headline
+let sortAsc = true;
+let collapsed = new Set();     // group headers the user has folded shut
+let baseline = load(STORE);
+
+function load(key) {
+  try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+// --- persisted UI state ----------------------------------------------------
+// Everything the controls hold is written back on each render, so returning to
+// the page restores the view you left.
+function saveUi() {
+  save(STORE_UI, {
+    families: Object.fromEntries(FAMILIES.map(f => [f.key, f.on])),
+    showFree: document.getElementById('showFree').checked,
+    showBatch: document.getElementById('showBatch').checked,
+    search: document.getElementById('search').value,
+    inTok: document.getElementById('inTok').value,
+    outTok: document.getElementById('outTok').value,
+    sortKey, sortAsc,
+    collapsed: [...collapsed],
+    v: UI_VERSION,
+  });
+}
+
+function restoreUi() {
+  const ui = load(STORE_UI);
+  if (!Object.keys(ui).length) return;      // first visit: keep the defaults
+  // Families are matched by key, so adding or renaming one later just falls
+  // back to its default instead of breaking the stored state.
+  if (ui.families) FAMILIES.forEach(f => {
+    if (typeof ui.families[f.key] === 'boolean') f.on = ui.families[f.key];
+  });
+  const set = (id, prop, v) => {
+    if (v !== undefined && v !== null) document.getElementById(id)[prop] = v;
+  };
+  set('showFree', 'checked', ui.showFree);
+  set('showBatch', 'checked', ui.showBatch);
+  set('search', 'value', ui.search);
+  set('inTok', 'value', ui.inTok);
+  set('outTok', 'value', ui.outTok);
+  // A saved sort from before the default changed would hide the new one, so
+  // only honour it once the stored settings know about the current default.
+  if ((ui.v || 0) >= UI_VERSION) {
+    if (ui.sortKey && document.querySelector(`th[data-key="${ui.sortKey}"]`)) sortKey = ui.sortKey;
+    if (typeof ui.sortAsc === 'boolean') sortAsc = ui.sortAsc;
+  }
+  if (Array.isArray(ui.collapsed)) collapsed = new Set(ui.collapsed);
+}
+
+restoreUi();
+
+// --- controls --------------------------------------------------------------
+const famBox = document.getElementById('families');
+FAMILIES.forEach(f => {
+  const l = document.createElement('label');
+  l.className = 'chk';
+  l.innerHTML = `<input type="checkbox" data-fam="${f.key}"${f.on ? ' checked' : ''}> ${f.label}`;
+  l.querySelector('input').addEventListener('change', e => { f.on = e.target.checked; render(); });
+  famBox.appendChild(l);
+});
+
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('showFree').addEventListener('change', render);
+document.getElementById('showBatch').addEventListener('change', render);
+document.getElementById('inTok').addEventListener('input', render);
+document.getElementById('outTok').addEventListener('input', render);
+document.getElementById('refresh').addEventListener('click', () => {
+  endpoints = {};               // drop the cached provider rosters too
+  save(STORE_EP, endpoints);
+  fetchModels();
+});
+document.getElementById('baseline').addEventListener('click', () => {
+  baseline = {};
+  models.forEach(m => baseline[m.id] = { prompt: m.prompt, completion: m.completion });
+  save(STORE, baseline);
+  render();
+});
+
+document.getElementById('resetUi').addEventListener('click', () => {
+  try { localStorage.removeItem(STORE_UI); } catch {}
+  location.reload();          // simplest way back to the built-in defaults
+});
+
+// Delegated so it keeps working across the re-renders that replace the rows.
+document.getElementById('rows').addEventListener('click', e => {
+  const head = e.target.closest('tr.ghead');
+  if (!head) return;
+  const key = head.dataset.gkey;
+  collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key);
+  render();
+});
+
+document.querySelectorAll('th[data-key]').forEach(th => {
+  th.addEventListener('click', () => {
+    const k = th.dataset.key;
+    if (k === sortKey) sortAsc = !sortAsc;
+    else { sortKey = k; sortAsc = true; }
+    render();
+  });
+});
+
+// --- data ------------------------------------------------------------------
+async function fetchModels() {
+  const status = document.getElementById('status');
+  status.className = 'status';
+  status.textContent = 'fetching…';
+  try {
+    const res = await fetch(API, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    models = json.data.map(normalise);
+    // First run: whatever we see now becomes the baseline, so deltas start at zero.
+    if (!Object.keys(baseline).length) {
+      models.forEach(m => baseline[m.id] = { prompt: m.prompt, completion: m.completion });
+      save(STORE, baseline);
+    }
+    status.textContent = 'updated ' + new Date().toLocaleTimeString() +
+                         ' · ' + json.data.length + ' models on OpenRouter';
+    render();
+  } catch (err) {
+    status.className = 'status err';
+    status.textContent = 'fetch failed: ' + err.message;
+  }
+}
+
+function normalise(m) {
+  const p = m.pricing || {};
+  const num = v => (v === undefined || v === null || v === '') ? null : parseFloat(v);
+  return {
+    id: m.id,
+    name: m.name || m.id,
+    free: /:free$/.test(m.id),
+    batch: /:batch$/.test(m.id),      // half price, but only via the batch API
+    prompt: num(p.prompt),
+    completion: num(p.completion),
+    cache: num(p.input_cache_read),
+    context: m.top_provider?.context_length || m.context_length || null,
+    modality: m.architecture?.modality || '',
+  };
+}
+
+// --- providers -------------------------------------------------------------
+// The models list says nothing about who actually serves a model, so each one
+// needs its own /endpoints call. Those are fetched lazily for the rows on
+// screen, a few at a time, and cached so a reload doesn't refetch everything.
+let endpoints = load(STORE_EP);
+let epInFlight = 0;
+let epQueue = [];
+let epRedrawTimer = null;
+
+function providersFor(id) {
+  const hit = endpoints[id];
+  return hit && (Date.now() - hit.t) < EP_TTL ? hit.list : null;
+}
+
+function queueProviders(ids) {
+  ids.forEach(id => {
+    // "~" ids are routing aliases (~openai/gpt-latest); they have no endpoint
+    // roster of their own and 404 if asked for one.
+    if (id.startsWith('~')) return;
+    if (providersFor(id) || epQueue.includes(id)) return;
+    epQueue.push(id);
+  });
+  pumpProviders();
+}
+
+function pumpProviders() {
+  while (epInFlight < 4 && epQueue.length) {
+    const id = epQueue.shift();
+    epInFlight++;
+    fetchEndpoints(id).finally(() => {
+      epInFlight--;
+      // Batch the redraws so 50 models don't cause 50 renders.
+      clearTimeout(epRedrawTimer);
+      epRedrawTimer = setTimeout(() => { save(STORE_EP, endpoints); render(); }, 250);
+      pumpProviders();
+    });
+  }
+}
+
+async function fetchEndpoints(id) {
+  try {
+    const res = await fetch(`${API}/${id.replace(/^~/, '')}/endpoints`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const eps = (await res.json()).data.endpoints || [];
+    endpoints[id] = {
+      t: Date.now(),
+      list: eps.map(e => ({
+        n: e.provider_name,
+        p: parseFloat(e.pricing.prompt),
+        c: parseFloat(e.pricing.completion),
+        // "openai/flex", "coreweave/bf16" → the qualifier after the provider
+        // slug, which is what distinguishes same-provider variants.
+        q: (e.tag || '').split('/').slice(1).join('/') || e.quantization || '',
+        // Opt-in service tiers and data policies: you only land on these by
+        // asking for them, so they don't take a share of default traffic.
+        tier: /^(flex|priority|batch|scale|zdr)\b/.test(
+          (e.tag || '').split('/').slice(1).join('/')),
+        // Availability, and OpenRouter's own status flag (negative = deranked).
+        u: e.uptime_last_30m ?? e.uptime_last_1d ?? null,
+        st: e.status ?? 0,
+      })),
+    };
+  } catch {
+    // Cache the failure briefly too, so one bad model doesn't retry forever.
+    endpoints[id] = { t: Date.now(), list: [] };
+  }
+}
+
+// OpenRouter load-balances across providers with inverse-square weighting on
+// price, and skips providers that are currently down. Modelling availability as
+// the fraction of traffic a provider can actually take:
+//     w_i ∝ u_i / p_i²   ⇒   E[p] = Σ(u_i/p_i) / Σ(u_i/p_i²)
+// Opt-in tiers are excluded (default traffic never lands on them), as are
+// endpoints OpenRouter has deranked (negative status).
+function expectedCost(list, blendPair) {
+  const ps = list
+    .filter(e => !e.tier && (e.st ?? 0) >= 0)
+    .map(e => ({ n: e.n, p: blendPair(e.p, e.c), u: (e.u ?? 100) / 100 }))
+    .filter(e => Number.isFinite(e.p) && e.u > 0);
+  if (!ps.length) return null;
+  if (ps.some(e => e.p === 0)) return { avg: 0, shares: [] };   // a free route dominates
+
+  let s1 = 0, s2 = 0;
+  ps.forEach(e => { s1 += e.u / e.p; s2 += e.u / (e.p * e.p); });
+  const shares = ps.map(e => ({ n: e.n, p: e.p, up: e.u, w: (e.u / (e.p * e.p)) / s2 }))
+                   .sort((a, b) => b.w - a.w);
+  return { avg: s1 / s2, shares };
+}
+
+// Who serves this model by default, how many alternatives exist, and whether
+// one of them is meaningfully cheaper than the price shown in the table.
+function providerInfo(m, blendPair) {
+  const list = providersFor(m.id);
+  if (!list) return null;
+  if (!list.length) return { names: 0 };
+
+  const scored = list.map(e => ({ ...e, b: blendPair(e.p, e.c) }))
+                     .sort((a, b) => a.b - b.b);
+  // The list price belongs to whichever endpoint OpenRouter routes to first.
+  const dflt = list.find(e => e.p === m.prompt && e.c === m.completion) || list[0];
+  const names = [...new Set(list.map(e => e.n))];
+  // Only a *different* provider counts as a cheaper route. The same provider's
+  // low-price rows are service tiers (openai/flex, xai/zdr), which come with
+  // different latency or throughput terms rather than being a better deal.
+  const cheap = scored.find(e => e.n !== dflt.n);
+  const shown = blendPair(dflt.p, dflt.c);
+  const exp = expectedCost(list, blendPair);
+  return {
+    expected: exp?.avg ?? null,
+    expTip: exp && exp.shares.length
+      ? 'estimated share of traffic (price⁻² × uptime)\n' +
+        exp.shares.slice(0, 8).map(s =>
+          `${(s.w * 100).toFixed(0)}%  ${s.n}  ${price(s.p)}` +
+          (s.up < 0.99 ? `  ${(s.up * 100).toFixed(0)}% up` : '')).join('\n') +
+        (exp.shares.length > 8 ? `\n…${exp.shares.length - 8} more` : '')
+      : '',
+    name: dflt.n,
+    names: names.length,
+    others: names.length - 1,
+    cheapest: cheap?.n,
+    cheapestBlend: cheap?.b,
+    saving: (cheap && shown > 0) ? (shown - cheap.b) / shown : 0,
+    tip: scored.slice(0, 14)
+      .map(e => `${e.n}${e.q ? ' (' + e.q + ')' : ''}  ${price(e.b)}`)
+      .join('\n') + (scored.length > 14 ? `\n…${scored.length - 14} more` : ''),
+  };
+}
+
+// --- render ----------------------------------------------------------------
+function render() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const showFree = document.getElementById('showFree').checked;
+  const showBatch = document.getElementById('showBatch').checked;
+  const wIn = parseFloat(document.getElementById('inTok').value) || 0;
+  const wOut = parseFloat(document.getElementById('outTok').value) || 0;
+  const wSum = (wIn + wOut) || 1;
+  const active = FAMILIES.filter(f => f.on);
+  const blend = m => (m.prompt == null || m.completion == null)
+    ? null
+    : (wIn * m.prompt + wOut * m.completion) / wSum;
+
+  // Which dated snapshot of each model is the cheapest? Computed over every
+  // model the API returned, not just the visible rows, so the badge doesn't
+  // move around as filters change.
+  const best = cheapestVersions(models, blend);
+
+  const rows = models
+    .filter(m => active.some(f => f.test(m.id)))
+    .filter(m => showFree || !m.free)
+    .filter(m => showBatch || !m.batch)
+    .filter(m => !q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
+    .map(m => {
+      const info = providerInfo(m, (p, c) => (wIn * p + wOut * c) / wSum);
+      return { ...m, blended: blend(m), prov: info, provider: info?.name || '',
+               expected: info?.expected ?? null };
+    });
+
+  queueProviders(rows.map(m => m.id));   // fill in whatever this view is missing
+
+  // Name order nests two levels: a release line (openai/gpt-5, deepseek/
+  // deepseek-v4) holding variant families (…-v4-flash and its dated builds).
+  // Sub-families are ordered by their cheapest member so cost still rises down
+  // the table while each family stays contiguous.
+  const famCount = new Map();     // release line  -> rows
+  const subCount = new Map();     // variant family -> rows
+  const subMin = new Map();       // variant family -> cheapest blended
+  const famSpan = new Map();      // both levels -> {lo, hi} blended, for the
+  const subSpan = new Map();      // summary shown when a header is collapsed
+  if (sortKey === 'name') rows.forEach(m => {
+    const f = familyKey(m.id), s = baseKey(m.id);
+    famCount.set(f, (famCount.get(f) || 0) + 1);
+    subCount.set(s, (subCount.get(s) || 0) + 1);
+    const b = m.blended == null ? Infinity : m.blended;
+    if (b < (subMin.get(s) ?? Infinity)) subMin.set(s, b);
+    // A collapsed header still has to say something useful about what it hides.
+    [[famSpan, f], [subSpan, s]].forEach(([map, k]) => {
+      if (m.blended == null) return;
+      const sp = map.get(k) || { lo: Infinity, hi: -Infinity };
+      sp.lo = Math.min(sp.lo, m.blended);
+      sp.hi = Math.max(sp.hi, m.blended);
+      map.set(k, sp);
+    });
+  });
+
+  rows.sort((a, b) => {
+    if (sortKey === 'name') {
+      const fa = familyKey(a.id), fb = familyKey(b.id);
+      if (fa !== fb) return sortAsc ? fa.localeCompare(fb) : fb.localeCompare(fa);
+      const sa = baseKey(a.id), sb = baseKey(b.id);
+      if (sa !== sb) return (subMin.get(sa) - subMin.get(sb)) || sa.localeCompare(sb);
+      if (a.blended == null) return 1;
+      if (b.blended == null) return -1;
+      return a.blended - b.blended;
+    }
+    // Until a model's provider roster has loaded, rank it by its headline price
+    // so the first paint is already meaningful.
+    const val = r => sortKey === 'expected' ? (r.expected ?? r.blended) : r[sortKey];
+    const av = val(a), bv = val(b);
+    if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    if (av == null) return 1;              // unpriced rows always sink
+    if (bv == null) return -1;
+    return sortAsc ? av - bv : bv - av;
+  });
+
+  document.querySelectorAll('th[data-key]').forEach(th =>
+    th.classList.toggle('sorted', th.dataset.key === sortKey));
+  saveUi();
+
+  const tbody = document.getElementById('rows');
+  tbody.innerHTML = '';
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="status">no models match the current filters</td></tr>';
+    return;
+  }
+
+  // Headers appear only where they earn their keep: a level with a single row
+  // under it would just be that row said twice.
+  let openFam = null, openSub = null, prevSub = null;
+  let n = 0;                                // rank counts visible rows only
+  const header = (cls, key, count, word, span) => {
+    const shut = collapsed.has(key);
+    const head = document.createElement('tr');
+    head.className = cls + (shut ? ' closed' : '');
+    head.dataset.gkey = key;
+    head.innerHTML =
+      `<td colspan="8"><span class="caret">${shut ? '▸' : '▾'}</span>` +
+      `<span class="gname">${esc(key)}</span>` +
+      `<span class="gcount">${count} ${word}</span>` +
+      (shut && span && span.lo < Infinity
+        ? `<span class="grange">${price(span.lo)}${span.hi > span.lo ? ' – ' + price(span.hi) : ''}</span>`
+        : '');
+    tbody.appendChild(head);
+  };
+
+  rows.forEach(m => {
+    const fam = familyKey(m.id), sub = baseKey(m.id);
+    const inFam = famCount.get(fam) > 1;
+    const inSub = subCount.get(sub) > 1;
+    if (inFam && fam !== openFam) {
+      header('ghead', fam, famCount.get(fam), 'models', famSpan.get(fam));
+      openSub = null;                       // sub-headers restart inside a family
+    }
+    if (inFam) openFam = fam;
+    if (inFam && collapsed.has(fam)) return;          // whole line folded away
+
+    // Skip a sub-header that would just repeat the family header above it.
+    if (inSub && sub !== openSub && !(inFam && sub === fam)) {
+      header('ghead sub', sub, subCount.get(sub), 'versions', subSpan.get(sub));
+    }
+    if (inSub) openSub = sub;
+    if (inSub && collapsed.has(sub)) return;
+
+    const grouped = inFam || inSub;
+    const key = inSub ? sub : fam;
+    const i = n++;
+    const base = baseline[m.id];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <span class="rank">${String(i + 1).padStart(2, ' ')}</span>
+        <a class="mid" href="https://openrouter.ai/${m.id.replace(/^~/, '')}" target="_blank" rel="noopener">${grouped ? idUnderFamily(m.id, key) : esc(m.id)}</a>
+        ${best.winners.has(m.id)
+          ? `<span class="best" title="cheapest of ${best.sizes.get(m.id)} priced versions of this model">$</span>`
+          : ''}
+        ${m.free ? '<span class="tag free">free</span>' : ''}
+        ${m.batch ? '<span class="tag batch">batch</span>' : ''}
+        ${/image|video|audio/.test(m.modality) ? '<span class="tag">multimodal</span>' : ''}
+        <span class="hname">${esc(m.name.replace(/^[^:]+:\s*/, ''))}</span>
+      </td>
+      <td class="num">${price(m.prompt)}${delta(m.prompt, base && base.prompt)}</td>
+      <td class="num">${price(m.completion)}${delta(m.completion, base && base.completion)}</td>
+      <td class="num">${price(m.cache)}</td>
+      <td class="num blend">${price(m.blended)}</td>
+      <td class="num est"${m.prov?.expTip ? ` title="${esc(m.prov.expTip)}"` : ''}>${expectedCell(m)}</td>
+      <td class="num">${ctx(m.context)}</td>
+      <td class="prov">${providerCell(m)}</td>`;
+    if (grouped) {
+      tr.classList.add(inSub && inFam ? 'grp-deep' : 'grp-cont');
+      // Soften the rule between siblings so the family reads as one block.
+      if (prevSub === sub) tbody.lastChild.classList.add('grp-open');
+    }
+    prevSub = sub;
+    tbody.appendChild(tr);
+  });
+}
+
+// Inside a family the shared prefix is already in the header, so dim it and
+// let the part that distinguishes this variant carry the emphasis.
+function idUnderFamily(id, key) {
+  const lead = id.startsWith('~') ? '~' : '';
+  const bare = lead ? id.slice(1) : id;
+  if (!bare.startsWith(key)) return esc(id);
+  return `${lead}<span class="pfx">${esc(key)}</span>${esc(bare.slice(key.length))}`;
+}
+
+// OpenRouter ships the same model several times under dated ids
+// (deepseek-v4-flash, -flash-0731, -flash-latest). Strip the version suffix to
+// get a family key so the variants can be compared against each other.
+function baseKey(id) {
+  return id
+    .replace(/^~/, '')
+    .replace(/:(free|batch)$/, '')
+    .replace(/[-@](latest|preview|exp|\d{4}(-\d{2}-\d{2})?|\d{6}|\d{8})$/, '');
+}
+
+// The release line an id belongs to: everything up to and including its version
+// number. openai/gpt-5-mini and openai/gpt-5-pro share openai/gpt-5, while
+// openai/gpt-5.1 starts a line of its own. Ids with no version number (
+// openai/gpt-chat-latest) are their own line.
+function familyKey(id) {
+  const bare = id.replace(/^~/, '').replace(/:(free|batch)$/, '');
+  const cut = bare.indexOf('/');
+  const vendor = bare.slice(0, cut + 1), model = bare.slice(cut + 1);
+  const stem = model.match(/^.*?-?v?\d+(?:\.\d+)?/);
+  return stem ? vendor + stem[0] : bare;
+}
+
+// Returns the ids that are the cheapest of their group, but only for groups
+// that actually disagree on price — a lone version, or several versions all
+// priced the same, gets no badge because there is nothing to choose between.
+function cheapestVersions(list, blend) {
+  const groups = new Map();
+  list.forEach(m => {
+    const b = blend(m);
+    // Free and batch tiers are a different service, not a cheaper release of
+    // the same one, so they don't compete for the badge.
+    if (m.free || m.batch || b == null) return;
+    const k = baseKey(m.id);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push({ id: m.id, blended: b });
+  });
+
+  const winners = new Set();
+  const sizes = new Map();
+  groups.forEach(g => {
+    if (g.length < 2) return;
+    const lo = Math.min(...g.map(x => x.blended));
+    const hi = Math.max(...g.map(x => x.blended));
+    if (lo === hi) return;
+    g.filter(x => x.blended === lo).forEach(x => {
+      winners.add(x.id);
+      sizes.set(x.id, g.length);
+    });
+  });
+  return { winners, sizes };
+}
+
+// The estimate only earns its place when it disagrees with the headline price,
+// so a single-provider model just shows a dash.
+function expectedCell(m) {
+  const e = m.expected;
+  if (e == null) return '<span class="pend">·</span>';
+  const gap = m.blended > 0 ? (e - m.blended) / m.blended : 0;
+  const cls = Math.abs(gap) < 0.02 ? 'same' : (gap < 0 ? 'below' : 'above');
+  return `<span class="${cls}">${price(e)}</span>`;
+}
+
+function providerCell(m) {
+  const info = m.prov;
+  if (m.id.startsWith('~')) return '<span class="pend">alias</span>';
+  if (!info) return '<span class="pend">…</span>';
+  if (!info.names) return '<span class="pend">—</span>';
+  // A cheaper route is only worth flagging if it is more than noise.
+  const cheaper = info.saving > 0.05
+    ? ` <span class="cheaper" title="cheapest route: ${esc(info.cheapest)} at ${price(info.cheapestBlend)} (${Math.round(info.saving * 100)}% less)">↓${Math.round(info.saving * 100)}%</span>`
+    : '';
+  const more = info.others > 0 ? `<span class="more">+${info.others}</span>` : '';
+  return `<span title="${esc(info.tip)}">${esc(info.name)}${more}</span>${cheaper}`;
+}
+
+function price(v) {
+  if (v == null) return '—';
+  const per = v * M;
+  if (per === 0) return '$0';
+  return '$' + (per < 1 ? per.toFixed(3) : per.toFixed(2));
+}
+
+// Some context windows are binary (262144), others decimal (1000000); print each
+// in whichever unit comes out round.
+function ctx(n) {
+  if (!n) return '—';
+  const v = n / (n % 1024 === 0 ? 1024 : 1000);
+  if (v < 1000) return Math.round(v) + 'K';
+  const m = v / 1000;
+  return (Math.abs(m - Math.round(m)) < 0.05 ? Math.round(m) : m.toFixed(1)) + 'M';
+}
+
+function delta(now, was) {
+  if (now == null || was == null || was === now) return '';
+  const pct = was === 0 ? null : ((now - was) / was) * 100;
+  const dir = now > was ? 'up' : 'down';
+  const arrow = now > was ? '▲' : '▼';
+  // Keep a decimal on small moves so a real change never reads as "0%".
+  const abs = Math.abs(pct);
+  const txt = pct == null ? arrow
+            : `${arrow}${abs < 9.5 ? abs.toFixed(1) : abs.toFixed(0)}%`;
+  return ` <span class="delta ${dir}" title="was ${price(was)}">${txt}</span>`;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+fetchModels();
+setInterval(fetchModels, 15 * 60 * 1000);   // re-poll every 15 minutes
+</script>
+</body>
+</html>

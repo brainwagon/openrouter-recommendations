@@ -1,0 +1,5 @@
+# Playwright MCP scratch output
+.playwright-mcp/
+
+# Stray screenshots from local testing (docs/ is tracked)
+/*.png
