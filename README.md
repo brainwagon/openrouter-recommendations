@@ -13,8 +13,10 @@ No build step, no dependencies, no API key — open `index.html` in a browser.
 - Pulls the public `/api/v1/models` endpoint on load and every 15 minutes, then
   each model's `/endpoints` roster to learn who actually serves it.
 - Filters to a set of model families — Claude 5, DeepSeek V4, Gemma 4, GPT-5,
-  Grok 4, Qwen 3.6/3.8 — each a checkbox, with the preceding generation of each
-  available behind its own toggle.
+  Grok 4, Kimi K3, Nemotron 3.5, Ox Alpha, Qwen 3.6/3.8 — each a checkbox, with
+  the preceding generation available behind its own toggle where there is one.
+  Ox Alpha is a cloaked pre-release served under the `stealth/` vendor, so it
+  prices at $0 and sorts to the top until it relaunches under its real name.
 - Ranks by **expected** cost across a slug's providers, with **blended**
   input/output pricing at your own prompt/completion mix (default 3:1), since
   output tokens usually dominate a real bill.

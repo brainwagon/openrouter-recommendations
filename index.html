@@ -321,6 +321,9 @@ const FAMILIES = [
   { key: 'kimik3',  label: 'Kimi K3',      on: true,  test: id => /^~?moonshotai\/kimi-k3/.test(id) },
   { key: 'nemold',  label: 'Nemotron 3 & older', on: false, test: id => /^~?nvidia\/nemotron-/.test(id) && !/^~?nvidia\/nemotron-3\.5-/.test(id) },
   { key: 'nem35',   label: 'Nemotron 3.5', on: true,  test: id => /^~?nvidia\/nemotron-3\.5-/.test(id) },
+  // Cloaked pre-release: served free under a stealth vendor while it is being
+  // evaluated, so it prices at $0 until it relaunches under its real name.
+  { key: 'oxalpha', label: 'Ox Alpha',    on: true,  test: id => /^~?stealth\/ox-alpha/.test(id) },
   { key: 'qwen36',  label: 'Qwen 3.6',    on: true,  test: id => /^~?qwen\/qwen3\.6/.test(id) },
   { key: 'qwen38',  label: 'Qwen 3.8',    on: true,  test: id => /^~?qwen\/qwen3\.8/.test(id) },
 ];
