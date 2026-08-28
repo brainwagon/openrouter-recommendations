@@ -19,6 +19,15 @@ No build step, no dependencies, no API key — open `index.html` in a browser.
   GLM 5.3 replaces the old Ox Alpha entry: that cloaked `stealth/ox-alpha`
   pre-release turned out to be Z.ai's GLM 5.3 Flash, and the stealth slug no
   longer has any providers behind it.
+- Carries one capability checkbox alongside the families: **Image generation**,
+  off by default, which picks out the models that emit images rather than only
+  reading them. It ORs with the families, so on its own it isolates the nine
+  image models and alongside them it adds them to the view. Those rows wear an
+  `image` tag whose tooltip gives the image-output rate — generated images are
+  billed as output tokens, roughly 1.1-1.3K of them per image, so the rate is a
+  per-1M price like any other. It is *not* folded into Blended or Est. avg,
+  which still rank on text pricing alone; `google/gemini-3-pro-image` looks
+  mid-pack at $2/$12 text while charging $120/1M for the pixels.
 - Ranks by **expected** cost across a slug's providers, with **blended**
   input/output pricing at your own prompt/completion mix (default 3:1), since
   output tokens usually dominate a real bill.

@@ -115,6 +115,7 @@
   }
   .tag.free { color: var(--down); border-color: #2f5c3c; }
   .tag.batch { color: var(--accent); border-color: #2b4a63; }
+  .tag.image { color: #c08ae0; border-color: #543a66; }
   .best { color: var(--down); font-weight: 700; margin-left: 5px; cursor: help; }
   tr.grp-open > td { border-bottom-color: #2a2f38; }
   tr.grp-cont > td:first-child { padding-left: 24px; }
@@ -332,6 +333,10 @@ const FAMILIES = [
   { key: 'hyold',   label: 'Hunyuan HY3 & older', on: false,
     test: id => /^~?tencent\//.test(id) && !/^~?tencent\/hy4/.test(id) },
   { key: 'hy4',     label: 'Hunyuan HY4',  on: true,  test: id => /^~?tencent\/hy4/.test(id) },
+  // Not a model line but a capability, so it tests the model rather than the id
+  // (every other entry ignores the second argument). It ORs with the families
+  // above: on its own it isolates the image models, alongside them it adds them.
+  { key: 'imagegen', label: 'Image generation', on: false, test: (id, m) => !!m?.imageGen },
   { key: 'kimiold', label: 'Kimi K2 & older', on: false, test: id => /^~?moonshotai\/kimi-(k2|latest)/.test(id) },
   { key: 'kimik3',  label: 'Kimi K3',      on: true,  test: id => /^~?moonshotai\/kimi-k3/.test(id) },
   { key: 'nemold',  label: 'Nemotron 3 & older', on: false, test: id => /^~?nvidia\/nemotron-/.test(id) && !/^~?nvidia\/nemotron-3\.5-/.test(id) },
@@ -497,6 +502,13 @@ function normalise(m) {
     cache: num(p.input_cache_read),
     context: m.top_provider?.context_length || m.context_length || null,
     modality: m.architecture?.modality || '',
+    // Generated images are billed as output tokens (an image runs ~1.1-1.3K of
+    // them), so image_output is a $/token rate like any other and prints in the
+    // same per-1M unit. Requiring a price is also what separates a real image
+    // model from the Auto Routers, which advertise every modality and price none.
+    imageOut: num(p.image_output),
+    imageGen: num(p.image_output) != null
+      && /image/.test((m.architecture?.modality || '').split('->')[1] || ''),
   };
 }
 
@@ -647,7 +659,7 @@ function render() {
   const best = cheapestVersions(models, blend);
 
   const rows = models
-    .filter(m => active.some(f => f.test(m.id)))
+    .filter(m => active.some(f => f.test(m.id, m)))
     .filter(m => showFree || !m.free)
     .filter(m => showBatch || !m.batch)
     .filter(m => !q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
@@ -766,7 +778,9 @@ function render() {
           : ''}
         ${m.free ? '<span class="tag free">free</span>' : ''}
         ${m.batch ? '<span class="tag batch">batch</span>' : ''}
-        ${/image|video|audio/.test(m.modality) ? '<span class="tag">multimodal</span>' : ''}
+        ${m.imageGen
+          ? `<span class="tag image" title="generates images; image output ${price(m.imageOut)} per 1M tokens, and one image is roughly 1.1-1.3K of them">image</span>`
+          : /image|video|audio/.test(m.modality) ? '<span class="tag">multimodal</span>' : ''}
         <span class="hname">${esc(m.name.replace(/^[^:]+:\s*/, ''))}</span>
       </td>
       <td class="num">${price(m.prompt)}${delta(m.prompt, base && base.prompt)}</td>
