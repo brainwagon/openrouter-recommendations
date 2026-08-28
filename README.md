@@ -13,8 +13,9 @@ No build step, no dependencies, no API key — open `index.html` in a browser.
 - Pulls the public `/api/v1/models` endpoint on load and every 15 minutes, then
   each model's `/endpoints` roster to learn who actually serves it.
 - Filters to a set of model families — Claude 5, DeepSeek V4, Gemma 4, GLM 5.3,
-  GPT-5, Grok 4, Kimi K3, Nemotron 3.5, Qwen 3.6/3.8 — each a checkbox, with
-  the preceding generation available behind its own toggle where there is one.
+  GPT-5, Grok 4, Hunyuan HY4, Kimi K3, Nemotron 3.5, Qwen 3.6/3.8 — each a
+  checkbox, with the preceding generation available behind its own toggle where
+  there is one.
   GLM 5.3 replaces the old Ox Alpha entry: that cloaked `stealth/ox-alpha`
   pre-release turned out to be Z.ai's GLM 5.3 Flash, and the stealth slug no
   longer has any providers behind it.
