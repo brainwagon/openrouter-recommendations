@@ -307,8 +307,9 @@ const CLAUDE_NOW = /^~?anthropic\/claude-(opus-5|sonnet-5|fable-5|haiku-4\.5|(op
 // previewed anonymously as Ox Alpha, plus the floating `glm-latest` alias.
 const GLM_NOW = /^~?z-ai\/glm-(5\.3|latest)/;
 
-// Listed by model line, older generation first. The checkboxes are laid out by
-// label (see below), so this array's order is for reading, not for display.
+// Alphabetical by label, older generation first within a model line — the same
+// order the checkboxes render in (they are sorted independently below, so this
+// is a convention for reading the source, not something the UI depends on).
 const FAMILIES = [
   { key: 'claudeold', label: 'Claude 4 & older', on: false,
     test: id => /^~?anthropic\//.test(id) && !CLAUDE_NOW.test(id) },
