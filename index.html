@@ -28,6 +28,9 @@
   /* Rows get hard to read when the columns are flung apart on a wide monitor,
      so the page stops growing past a comfortable measure. */
   header, .panel, footer, .explain { max-width: 1230px; }
+  /* The ten-column table is naturally wider than the prose measure; give it
+     room to sit at full width instead of scrolling inside a narrow panel. */
+  .panel.tablewrap { max-width: 1480px; }
   /* Long-form explainer: shut by default, so it costs one line until wanted. */
   .explain { margin: 0 0 10px; }
   .explain > summary {
@@ -81,7 +84,7 @@
   }
   button:hover { border-color: var(--accent); }
   .tablewrap { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 800px; }
+  table { border-collapse: collapse; width: 100%; min-width: 920px; }
   th, td { padding: 3px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
   th:first-child, td:first-child { text-align: left; }
   th {
@@ -188,6 +191,8 @@
         <th data-key="blended">Blended</th>
         <th data-key="expected" title="expected cost per 1M tokens given OpenRouter's inverse-square price weighting across providers">Est. avg</th>
         <th data-key="context">Context</th>
+        <th data-key="latency" title="Latency the default route's provider averaged serving this model on OpenRouter over the last week; hover for every measured endpoint">Latency</th>
+        <th data-key="throughput" title="Output tokens/second the default route's provider averaged serving this model on OpenRouter over the last week; hover for every measured endpoint">Speed</th>
         <th data-key="provider">Provider</th>
       </tr>
     </thead>
@@ -273,6 +278,15 @@
     left out, since default traffic never lands on them. Hover any Est. avg cell for the
     per-provider shares.
   </p>
+  <p>
+    <b>Latency</b> and <b>Speed</b> are OpenRouter's own measurements of real traffic —
+    the same daily per-endpoint series its model pages chart, averaged over the last
+    week and shown for the default route's provider. They are per-provider numbers like
+    price: a <span class="pend">—</span> means the endpoint has too little traffic to be
+    measured, and hovering either cell lists every endpoint in the roster that does have
+    numbers, fastest first. Providers with several measured endpoints (regional Vertex or
+    Bedrock deployments) show their average.
+  </p>
 
   <h3>How much to trust it</h3>
   <ul>
@@ -346,10 +360,11 @@ const FAMILIES = [
 ];
 
 const API = 'https://openrouter.ai/api/v1/models';
+const FAPI = 'https://openrouter.ai/api/frontend/v1';   // same daily stats the site charts
 const STORE = 'openrouter-price-baseline';
 const STORE_UI = 'openrouter-price-ui';
 const UI_VERSION = 2;          // bump when a stored default should be re-applied
-const STORE_EP = 'openrouter-price-endpoints-v3';   // v3 records uptime/status
+const STORE_EP = 'openrouter-price-endpoints-v5';   // v5 carries stats-API perf
 const EP_TTL = 6 * 60 * 60 * 1000;   // provider rosters change slowly; cache 6h
 const M = 1e6;
 
@@ -459,8 +474,10 @@ document.getElementById('rows').addEventListener('click', e => {
 document.querySelectorAll('th[data-key]').forEach(th => {
   th.addEventListener('click', () => {
     const k = th.dataset.key;
+    // Higher throughput is better, so the first click on Speed ranks fastest
+    // first; everything else follows the cheaper-first convention.
     if (k === sortKey) sortAsc = !sortAsc;
-    else { sortKey = k; sortAsc = true; }
+    else { sortKey = k; sortAsc = k !== 'throughput'; }
     render();
   });
 });
@@ -502,6 +519,7 @@ function normalise(m) {
     cache: num(p.input_cache_read),
     context: m.top_provider?.context_length || m.context_length || null,
     modality: m.architecture?.modality || '',
+    slug: m.canonical_slug || null,   // permaslug, the key OpenRouter's stats API uses
     // Generated images are billed as output tokens (an image runs ~1.1-1.3K of
     // them), so image_output is a $/token rate like any other and prints in the
     // same per-1M unit. Requiring a price is also what separates a real image
@@ -524,6 +542,25 @@ let epRedrawTimer = null;
 function providersFor(id) {
   const hit = endpoints[id];
   return hit && (Date.now() - hit.t) < EP_TTL ? hit.list : null;
+}
+
+function perfFor(id) {
+  const hit = endpoints[id];
+  return hit && (Date.now() - hit.t) < EP_TTL ? (hit.perf || []) : null;
+}
+
+// Join a roster entry to the stats series: provider slug first, provider name
+// as fallback. Providers with several endpoints (regional Bedrock or Vertex)
+// match several rows, so their numbers are averaged.
+function matchPerf(perf, e) {
+  let c = e.s ? perf.filter(r => r.s === e.s) : [];
+  if (!c.length) c = perf.filter(r => r.n === e.n || r.n.startsWith(e.n + ' '));
+  if (!c.length) return null;
+  const avg = k => {
+    const v = c.map(r => r[k]).filter(Number.isFinite);
+    return v.length ? v.reduce((a, b) => a + b) / v.length : null;
+  };
+  return { l: avg('l'), t: avg('t') };
 }
 
 function queueProviders(ids) {
@@ -553,11 +590,18 @@ function pumpProviders() {
 
 async function fetchEndpoints(id) {
   try {
-    const res = await fetch(`${API}/${id.replace(/^~/, '')}/endpoints`);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const eps = (await res.json()).data.endpoints || [];
+    const permaslug = models.find(m => m.id === id)?.slug;
+    const [res, perf] = await Promise.all([
+      fetch(`${API}/${id.replace(/^~/, '')}/endpoints`)
+        .then(async r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+      // Latency/speed come from the same daily stats the OpenRouter model
+      // pages chart; the public API's own perf fields stay null unauthenticated.
+      permaslug ? fetchPerf(permaslug).catch(() => []) : Promise.resolve([]),
+    ]);
+    const eps = res.data.endpoints || [];
     endpoints[id] = {
       t: Date.now(),
+      perf,
       list: eps.map(e => ({
         n: e.provider_name,
         p: parseFloat(e.pricing.prompt),
@@ -572,12 +616,49 @@ async function fetchEndpoints(id) {
         // Availability, and OpenRouter's own status flag (negative = deranked).
         u: e.uptime_last_30m ?? e.uptime_last_1d ?? null,
         st: e.status ?? 0,
+        // Provider slug (the tag's leading segment), used to join this endpoint
+        // to the site's per-endpoint performance stats.
+        s: (e.tag || '').split('/')[0] || '',
       })),
     };
   } catch {
     // Cache the failure briefly too, so one bad model doesn't retry forever.
-    endpoints[id] = { t: Date.now(), list: [] };
+    endpoints[id] = { t: Date.now(), list: [], perf: [] };
   }
+}
+
+// The unauthenticated /endpoints fields for latency/throughput report nothing,
+// but OpenRouter publishes the daily per-endpoint series its own model pages
+// chart. Three calls per model: the two series plus effective-pricing, which
+// names each endpoint and gives its provider slug.
+async function fetchPerf(permaslug) {
+  const q = encodeURIComponent(permaslug);
+  const series = kind =>
+    fetch(`${FAPI}/stats/${kind}-comparison?perfWorkload=text_generation&permaslug=${q}&timeRange=1w`)
+      .then(r => (r.ok ? r.json() : { data: [] }));
+  const [tp, lt, ep] = await Promise.all([
+    series('throughput'), series('latency'),
+    fetch(`${FAPI}/stats/effective-pricing?permaslug=${q}&shape=v7&variant=standard`)
+      .then(r => (r.ok ? r.json() : {})),
+  ]);
+  // Average the week's daily points per endpoint — a single day is noisy.
+  const agg = j => {
+    const sum = {}, cnt = {};
+    (j.data || []).forEach(d => Object.entries(d.y || {}).forEach(([u, v]) => {
+      if (Number.isFinite(v)) { sum[u] = (sum[u] || 0) + v; cnt[u] = (cnt[u] || 0) + 1; }
+    }));
+    return Object.fromEntries(Object.keys(sum).map(u => [u, sum[u] / cnt[u]]));
+  };
+  const T = agg(tp), L = agg(lt);
+  const names = ep?.data?.endpointNames || {}, slugs = ep?.data?.endpointProviderSlugs || {};
+  return [...new Set([...Object.keys(T), ...Object.keys(L)])]
+    .filter(u => names[u] || slugs[u])   // stats we can't attribute are noise
+    .map(u => ({
+      n: names[u] || slugs[u] || u.slice(0, 8),
+      s: slugs[u] || '',
+      l: L[u] ?? null,
+      t: T[u] ?? null,
+    })).filter(e => e.l != null || e.t != null);
 }
 
 // OpenRouter load-balances across providers with inverse-square weighting on
@@ -619,7 +700,19 @@ function providerInfo(m, blendPair) {
   const cheap = scored.find(e => e.n !== dflt.n);
   const shown = blendPair(dflt.p, dflt.c);
   const exp = expectedCost(list, blendPair);
+  // Per-endpoint stats, fastest first; the cell itself shows only the default
+  // route's provider, so old cached rosters without perf simply show dashes.
+  const perf = (perfFor(m.id) || []).slice().sort((a, b) => (b.t ?? -1) - (a.t ?? -1));
+  const dfltPerf = perf.length ? matchPerf(perf, dflt) : null;
   return {
+    latency: dfltPerf?.l ?? null,
+    throughput: dfltPerf?.t ?? null,
+    perfTip: perf.length
+      ? 'OpenRouter traffic, daily average over the last week (latency · tokens/s)\n' +
+        perf.slice(0, 8).map(e =>
+          `${e.n}  ${fmtLat(e.l)} · ${e.t != null ? fmtTput(e.t) + ' t/s' : '—'}`).join('\n') +
+        (perf.length > 8 ? `\n…${perf.length - 8} more` : '')
+      : '',
     expected: exp?.avg ?? null,
     expTip: exp && exp.shares.length
       ? 'estimated share of traffic (price⁻² × uptime)\n' +
@@ -666,7 +759,8 @@ function render() {
     .map(m => {
       const info = providerInfo(m, (p, c) => (wIn * p + wOut * c) / wSum);
       return { ...m, blended: blend(m), prov: info, provider: info?.name || '',
-               expected: info?.expected ?? null };
+               expected: info?.expected ?? null,
+               latency: info?.latency ?? null, throughput: info?.throughput ?? null };
     });
 
   queueProviders(rows.map(m => m.id));   // fill in whatever this view is missing
@@ -723,7 +817,7 @@ function render() {
   const tbody = document.getElementById('rows');
   tbody.innerHTML = '';
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="status">no models match the current filters</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="status">no models match the current filters</td></tr>';
     return;
   }
 
@@ -737,7 +831,7 @@ function render() {
     head.className = cls + (shut ? ' closed' : '');
     head.dataset.gkey = key;
     head.innerHTML =
-      `<td colspan="8"><span class="caret">${shut ? '▸' : '▾'}</span>` +
+      `<td colspan="10"><span class="caret">${shut ? '▸' : '▾'}</span>` +
       `<span class="gname">${esc(key)}</span>` +
       `<span class="gcount">${count} ${word}</span>` +
       (shut && span && span.lo < Infinity
@@ -789,6 +883,8 @@ function render() {
       <td class="num blend">${price(m.blended)}</td>
       <td class="num est"${m.prov?.expTip ? ` title="${esc(m.prov.expTip)}"` : ''}>${expectedCell(m)}</td>
       <td class="num">${ctx(m.context)}</td>
+      <td class="num"${m.prov?.perfTip ? ` title="${esc(m.prov.perfTip)}"` : ''}>${m.latency == null ? '<span class="pend">—</span>' : fmtLat(m.latency)}</td>
+      <td class="num"${m.prov?.perfTip ? ` title="${esc(m.prov.perfTip)}"` : ''}>${m.throughput == null ? '<span class="pend">—</span>' : fmtTput(m.throughput)}</td>
       <td class="prov">${providerCell(m)}</td>`;
     if (grouped) {
       tr.classList.add(inSub && inFam ? 'grp-deep' : 'grp-cont');
@@ -899,6 +995,18 @@ function ctx(n) {
   if (v < 1000) return Math.round(v) + 'K';
   const m = v / 1000;
   return (Math.abs(m - Math.round(m)) < 0.05 ? Math.round(m) : m.toFixed(1)) + 'M';
+}
+
+// Latency is reported in milliseconds; switch to seconds once it crosses one.
+function fmtLat(ms) {
+  if (ms == null) return '—';
+  return ms < 1000 ? Math.round(ms) + 'ms' : (ms / 1000).toFixed(1) + 's';
+}
+
+// Throughput is tokens/second; one decimal only below double digits.
+function fmtTput(t) {
+  if (t == null) return '—';
+  return t >= 100 ? String(Math.round(t)) : t.toFixed(t < 10 ? 1 : 0);
 }
 
 function delta(now, was) {

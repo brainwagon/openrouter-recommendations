@@ -11,7 +11,8 @@ No build step, no dependencies, no API key — open `index.html` in a browser.
 ## What it does
 
 - Pulls the public `/api/v1/models` endpoint on load and every 15 minutes, then
-  each model's `/endpoints` roster to learn who actually serves it.
+  each model's `/endpoints` roster to learn who actually serves it, plus three
+  frontend stats calls per model for its per-provider latency and throughput.
 - Filters to a set of model families — Claude 5, DeepSeek V4, Gemma 4, GLM 5.3,
   GPT-5, Grok 4, Hunyuan HY4, Kimi K3, Nemotron 3.5, Qwen 3.6/3.8 — each a
   checkbox, with the preceding generation available behind its own toggle where
@@ -45,7 +46,21 @@ No build step, no dependencies, no API key — open `index.html` in a browser.
 | Blended | `(in×input + out×output) / (in+out)` at your ratio |
 | Est. avg | Expected cost across all providers (see below); sorted by this |
 | Context | Context window |
+| Latency | Time-to-first-token the default route's provider averaged serving this model over the last week |
+| Speed | Output tokens/second for the same window |
 | Provider | Who serves the default route, `+n` others, `↓n%` if one is cheaper |
+
+Latency and Speed are per-provider numbers: OpenRouter's public API keeps those
+fields null for unauthenticated callers, so the page instead reads the daily
+per-endpoint series its own model pages chart
+(`/api/frontend/v1/stats/*-comparison`, joined to the roster through
+`effective-pricing`'s endpoint names and the `canonical_slug` from the models
+list). It is unofficial-but-public JSON with `access-control-allow-origin: *`;
+if OpenRouter reshapes it the columns simply fall back to dashes. A dim dash
+means the endpoint has too little traffic to be measured; hovering either cell
+lists every measured endpoint in the roster, fastest first. Providers with
+several measured endpoints (regional Vertex or Bedrock deployments) show their
+average.
 
 The page carries its own explainer — a collapsed block under the table covers
 the glyphs, how a slug is priced, and both formulas.
