@@ -101,7 +101,8 @@
   .rank { color: #5c626d; font-family: var(--mono); font-size: 11px; padding-right: 3px; }
   /* The id is what you paste into an API call, so it leads; the marketing name
      trails it as dim context. */
-  .mid { font-family: var(--mono); font-size: 13px; }
+  .mid { font-family: var(--mono); font-size: 13px; cursor: pointer; }
+  .mid .copied { color: var(--down); }
   .hname { color: var(--dim); font-size: 11px; margin-left: 7px; }
   td.prov { text-align: left; font-size: 12px; cursor: help; }
   td.est { cursor: help; }
@@ -222,6 +223,9 @@
       competes for the <span class="best">$</span>.</li>
     <li><span class="pend">alias</span> — a <code>~</code> routing alias
       (<code>~openai/gpt-latest</code>), which has no provider roster of its own.</li>
+    <li>Clicking a model id copies it to the clipboard — that id is what you
+      paste into an API call. The link itself still opens the model page in a
+      new tab on middle-click or right-click.</li>
     <li>Sorting by <b>Model</b> nests each release line over its variant families, cheapest
       first inside each; those headers collapse when clicked.</li>
   </ul>
@@ -477,12 +481,43 @@ document.getElementById('resetUi').addEventListener('click', () => {
 
 // Delegated so it keeps working across the re-renders that replace the rows.
 document.getElementById('rows').addEventListener('click', e => {
+  const link = e.target.closest('a.mid');
+  if (link) {
+    e.preventDefault();
+    copyText(link.dataset.id, link);
+    return;
+  }
   const head = e.target.closest('tr.ghead');
   if (!head) return;
   const key = head.dataset.gkey;
   collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key);
   render();
 });
+
+// Clicking a model id copies it — that id is what you paste into an API call.
+// The href stays for middle-click / right-click "open in new tab".
+function copyText(text, link) {
+  const done = () => {
+    const html = link.innerHTML;
+    link.innerHTML = '<span class="copied">copied!</span>';
+    setTimeout(() => { link.innerHTML = html; }, 900);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => legacyCopy(text, done));
+  } else {
+    legacyCopy(text, done);
+  }
+}
+
+function legacyCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch {}
+  ta.remove();
+}
 
 document.querySelectorAll('th[data-key]').forEach(th => {
   th.addEventListener('click', () => {
@@ -880,7 +915,7 @@ function render() {
     tr.innerHTML = `
       <td>
         <span class="rank">${String(i + 1).padStart(2, ' ')}</span>
-        <a class="mid" href="https://openrouter.ai/${m.id.replace(/^~/, '')}" target="_blank" rel="noopener">${grouped ? idUnderFamily(m.id, key) : esc(m.id)}</a>
+        <a class="mid" href="https://openrouter.ai/${m.id.replace(/^~/, '')}" target="_blank" rel="noopener" data-id="${esc(m.id)}" title="click to copy the model id">${grouped ? idUnderFamily(m.id, key) : esc(m.id)}</a>
         ${best.winners.has(m.id)
           ? `<span class="best" title="cheapest of ${best.sizes.get(m.id)} priced versions of this model">$</span>`
           : ''}
