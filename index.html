@@ -168,6 +168,7 @@
   <div class="row">
     <label class="chk"><input type="checkbox" id="showFree" checked> show <code>:free</code></label>
     <label class="chk"><input type="checkbox" id="showBatch"> show <code>:batch</code></label>
+    <label class="chk"><input type="checkbox" id="showAll" title="enable all families"> all models</label>
     <label>filter <input type="text" id="search" placeholder="substring of model id…"></label>
     <label>blend ratio
       <input type="number" id="inTok" value="3" min="0" step="0.5"> in :
@@ -389,6 +390,7 @@ function saveUi() {
     families: Object.fromEntries(FAMILIES.map(f => [f.key, f.on])),
     showFree: document.getElementById('showFree').checked,
     showBatch: document.getElementById('showBatch').checked,
+    showAll: document.getElementById('showAll').checked,
     search: document.getElementById('search').value,
     inTok: document.getElementById('inTok').value,
     outTok: document.getElementById('outTok').value,
@@ -411,6 +413,7 @@ function restoreUi() {
   };
   set('showFree', 'checked', ui.showFree);
   set('showBatch', 'checked', ui.showBatch);
+  set('showAll', 'checked', ui.showAll);
   set('search', 'value', ui.search);
   set('inTok', 'value', ui.inTok);
   set('outTok', 'value', ui.outTok);
@@ -439,10 +442,20 @@ const famBox = document.getElementById('families');
   l.querySelector('input').addEventListener('change', e => { f.on = e.target.checked; render(); });
   famBox.appendChild(l);
 });
+// restoreUi() may have turned "all models" on before these inputs existed.
+if (document.getElementById('showAll').checked)
+  famBox.querySelectorAll('input').forEach(i => { i.disabled = true; });
 
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('showFree').addEventListener('change', render);
 document.getElementById('showBatch').addEventListener('change', render);
+// "All models" ignores the family checkboxes entirely (it also catches slugs
+// no family claims), so they are dimmed while it is on rather than silently
+// overridden.
+document.getElementById('showAll').addEventListener('change', e => {
+  document.querySelectorAll('#families input').forEach(i => { i.disabled = e.target.checked; });
+  render();
+});
 document.getElementById('inTok').addEventListener('input', render);
 document.getElementById('outTok').addEventListener('input', render);
 document.getElementById('refresh').addEventListener('click', () => {
@@ -741,6 +754,7 @@ function render() {
   const wIn = parseFloat(document.getElementById('inTok').value) || 0;
   const wOut = parseFloat(document.getElementById('outTok').value) || 0;
   const wSum = (wIn + wOut) || 1;
+  const showAll = document.getElementById('showAll').checked;
   const active = FAMILIES.filter(f => f.on);
   const blend = m => (m.prompt == null || m.completion == null)
     ? null
@@ -752,7 +766,7 @@ function render() {
   const best = cheapestVersions(models, blend);
 
   const rows = models
-    .filter(m => active.some(f => f.test(m.id, m)))
+    .filter(m => showAll || active.some(f => f.test(m.id, m)))
     .filter(m => showFree || !m.free)
     .filter(m => showBatch || !m.batch)
     .filter(m => !q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
